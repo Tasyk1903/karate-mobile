@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
@@ -13,6 +16,10 @@ import 'package:karaterating_trainer/feed/feed_comments_sheet.dart';
 import 'package:karaterating_trainer/feed/feed_composer_sheet.dart';
 import 'package:karaterating_trainer/feed/feed_media.dart';
 import 'package:karaterating_trainer/feed/feed_settings_sheet.dart';
+import 'package:karaterating_trainer/feed/feed_post_screen.dart';
+import 'package:karaterating_trainer/feed/feed_reactions.dart';
+import 'package:karaterating_trainer/feed/my_posts_button.dart';
+import 'package:karaterating_trainer/navigation/coach_route_observer.dart';
 import 'package:karaterating_trainer/l10n/app_locale.dart';
 import 'package:karaterating_trainer/theme/app_theme.dart';
 
@@ -25,8 +32,26 @@ void feedTests({Future<void> Function(String)? screenshot}) {
     api = _FeedApi(AuthSession(await SharedPreferences.getInstance()));
   });
   tearDown(() => api.close());
+  setUpAll(() async {
+    const emoji = String.fromEnvironment('SCREENSHOT_EMOJI_FONT');
+    if (emoji.isNotEmpty) {
+      await (FontLoader(
+        'FeedTestEmoji',
+      )..addFont(File(emoji).readAsBytes().then(ByteData.sublistView))).load();
+    }
+    const font = String.fromEnvironment('SCREENSHOT_FONT');
+    if (font.isNotEmpty) {
+      await (FontLoader(
+        'FeedTestFont',
+      )..addFont(File(font).readAsBytes().then(ByteData.sublistView))).load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    }
+  });
 
   Widget app(Widget child, {bool dark = false}) => MaterialApp(
+    navigatorObservers: [coachRouteObserver],
     theme: dark ? AppTheme.dark() : AppTheme.light(),
     home: Scaffold(body: child),
   );
@@ -50,6 +75,201 @@ void feedTests({Future<void> Function(String)? screenshot}) {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('post detail fits phone widths locales themes and enlarged text', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    api.omitPost = true;
+    for (final width in [360.0, 393.0, 430.0]) {
+      for (final locale in AppLocale.values) {
+        for (final dark in [false, true]) {
+          tester.view.physicalSize = Size(width, 852);
+          tester.view.devicePixelRatio = 1;
+          final post = FeedPost.fromJson(api.post(1, 'Тренировка / Training'));
+          post.attachment = const FeedAttachment(
+            type: FeedAttachmentType.image,
+            assetPath: 'assets/images/student-kata.png',
+          );
+          await tester.pumpWidget(const SizedBox.shrink());
+          final base = dark ? AppTheme.dark() : AppTheme.light();
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: const String.fromEnvironment('SCREENSHOT_FONT').isEmpty
+                  ? base
+                  : base.copyWith(
+                      textTheme: base.textTheme.apply(
+                        fontFamily: 'FeedTestFont',
+                        fontFamilyFallback: const ['FeedTestEmoji'],
+                      ),
+                    ),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(1.35)),
+                child: RepaintBoundary(
+                  key: const ValueKey('feed-capture'),
+                  child: child!,
+                ),
+              ),
+              home: FeedPostScreen(
+                api: api,
+                strings: AppStrings(locale),
+                post: post,
+                onPost: (_) {},
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.runAsync(
+            () => precacheImage(
+              const AssetImage('assets/images/student-kata.png'),
+              tester.element(find.byType(FeedPostScreen)),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$width $locale $dark',
+          );
+          if (const bool.fromEnvironment('SAVE_SCREENSHOTS') &&
+              width == 393 &&
+              locale == AppLocale.ru) {
+            final boundary = tester.renderObject<RenderRepaintBoundary>(
+              find.byKey(const ValueKey('feed-capture')),
+            );
+            await tester.runAsync(() async {
+              final image = await boundary.toImage(pixelRatio: 2);
+              final bytes = await image.toByteData(
+                format: ui.ImageByteFormat.png,
+              );
+              final file = File(
+                'build/auth-screenshots/feed-detail-${dark ? 'dark' : 'light'}.png',
+              );
+              await file.parent.create(recursive: true);
+              await file.writeAsBytes(bytes!.buffer.asUint8List());
+              image.dispose();
+            });
+          }
+        }
+      }
+    }
+  });
+
+  testWidgets('profile opens own posts without audience filters', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app(MyPostsButton(api: api, strings: s)));
+    await tester.tap(find.text(s.myPosts));
+    await tester.pumpAndSettle();
+    expect(api.feedPages, ['mine:1']);
+    expect(find.text(s.myStudents), findsNothing);
+    expect(find.byTooltip(s.feedSettings), findsNothing);
+    expect(find.text(s.myPosts), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(MyPostsButton), findsOneWidget);
+  });
+
+  testWidgets(
+    'photo detail includes discussion and preserves paginated feed position on return',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      api.withPhotos = true;
+      await tester.pumpWidget(
+        app(
+          FeedScreen(strings: s, api: api, email: null, onLogout: () async {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (var i = 0; i < 8 && !api.feedPages.contains('all:2'); i++) {
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -350));
+        await tester.pumpAndSettle();
+      }
+      expect(api.feedPages, contains('all:2'));
+      final secondPhoto = find.descendant(
+        of: find.byKey(const ValueKey(2)),
+        matching: find.byType(FeedMedia),
+      );
+      await tester.scrollUntilVisible(
+        secondPhoto,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .controller!;
+      final offset = scroll.offset;
+      final requests = api.feedPages.length;
+      expect(offset, greaterThan(0));
+      await tester.tap(secondPhoto);
+      await tester.pumpAndSettle();
+      expect(find.byType(FeedPostScreen), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      final discussionScroll = find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('Мой комментарий'),
+        200,
+        scrollable: discussionScroll,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Мой комментарий'), findsOneWidget);
+      expect(find.text('❤️'), findsWidgets);
+      await tester.enterText(find.byType(TextField), 'New detail comment');
+      await tester.tap(find.byTooltip(s.send));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('New detail comment'),
+        200,
+        scrollable: discussionScroll,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('New detail comment'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(scroll.offset, closeTo(offset, 1));
+      expect(api.feedPages.length, requests);
+      expect(find.byKey(const ValueKey(2)), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('legacy reactions use colored emoji and keep selection', (
+    tester,
+  ) async {
+    String? selected;
+    await tester.pumpWidget(
+      app(
+        FeedReactions(
+          strings: s,
+          counts: const {'love': 2},
+          selected: 'love',
+          onSelect: (value) => selected = value,
+        ),
+      ),
+    );
+    for (final emoji in ['❤️', '😂', '👍', '🔥', '😢']) {
+      expect(find.text(emoji), findsOneWidget);
+    }
+    await tester.tap(find.text('🔥'));
+    expect(selected, 'fire');
+    expect(find.text('2'), findsOneWidget);
+  });
 
   testWidgets(
     'single attachment opens photo or video picker and preserves draft',
@@ -381,6 +601,9 @@ class _FeedApi extends ApiClient {
   final feedPages = <String>[];
   final studentsResponse = Completer<Map<String, dynamic>>();
   bool holdStudents = false, failMutation = false, replyDeleted = false;
+  bool withPhotos = false;
+  bool omitPost = false;
+  int activePost = 1;
   Map<String, dynamic>? settingsSaved;
   Map<String, String>? multipartFields;
   int? updatedComment, deletedComment;
@@ -389,9 +612,11 @@ class _FeedApi extends ApiClient {
 
   Map<String, dynamic> post(int id, String text) => {
     'id': id,
-    'text': text,
+    'text': withPhotos ? 'Photo post $id' : text,
     'author': {'name': 'Тренер Мартиросян Эдуард'},
     'created_at': '2026-09-09T10:00:00Z',
+    if (withPhotos)
+      'attachment': {'type': 'image', 'url': 'https://example.test/photo.jpg'},
     'comments_count': replyDeleted ? 2 : 3,
     'reactions': {'counts': {}, 'selected': null},
   };
@@ -457,6 +682,7 @@ class _FeedApi extends ApiClient {
       };
     }
     if (path.endsWith('/comments')) {
+      activePost = int.parse(path.split('/')[2]);
       final parent = query['parent_id'], next = query['page'] == '2';
       return {
         'data': parent != null
@@ -468,7 +694,7 @@ class _FeedApi extends ApiClient {
                   comment(3, 'Другой комментарий'),
               ],
         'meta': {'last_page': parent != null ? 1 : 2},
-        'post': post(1, 'Пост'),
+        if (!omitPost) 'post': post(activePost, 'Пост'),
       };
     }
     return {};
@@ -512,7 +738,7 @@ class _FeedApi extends ApiClient {
           parent: parent,
         ),
         'parent': parent == null ? null : comment(1, 'Мой комментарий'),
-        'post': post(1, 'Пост'),
+        'post': post(activePost, 'Пост'),
       };
     }
     lastReaction = body['type'] as String?;

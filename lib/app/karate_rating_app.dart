@@ -23,6 +23,7 @@ import '../l10n/app_locale.dart';
 import '../navigation/coach_navigation.dart';
 import '../navigation/coach_shell.dart';
 import '../theme/app_theme.dart';
+import 'launch_splash.dart';
 
 class KarateRatingApp extends StatefulWidget {
   const KarateRatingApp({super.key, required this.prefs, this.apiFactory});
@@ -34,7 +35,9 @@ class KarateRatingApp extends StatefulWidget {
 }
 
 class _KarateRatingAppState extends State<KarateRatingApp>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  late final AnimationController _launch;
+  bool _launchFinished = false;
   late final SessionController _auth;
   final _selected = ValueNotifier(CoachNavItem.feed);
   AppLocale _locale = AppLocale.ru;
@@ -51,6 +54,17 @@ class _KarateRatingAppState extends State<KarateRatingApp>
   @override
   void initState() {
     super.initState();
+    _launch =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 1000),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            setState(() => _launchFinished = true);
+            _openPayment();
+          }
+        });
+    _launch.forward();
     WidgetsBinding.instance.addObserver(this);
     _locale = widget.prefs.getString('app_locale') == 'en'
         ? AppLocale.en
@@ -121,6 +135,7 @@ class _KarateRatingAppState extends State<KarateRatingApp>
   }
 
   void _openPayment() {
+    if (!_launchFinished) return;
     if (_auth.profileSetupRequired) return;
     if (_pendingEducation != null &&
         _auth.status == SessionStatus.authorized &&
@@ -196,6 +211,7 @@ class _KarateRatingAppState extends State<KarateRatingApp>
 
   @override
   void dispose() {
+    _launch.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _links?.cancel();
     _auth.removeListener(_sessionChanged);
@@ -225,9 +241,15 @@ class _KarateRatingAppState extends State<KarateRatingApp>
           fit: StackFit.expand,
           children: [
             ExcludeSemantics(
-              excluding: _requiresConsent || _auth.profileSetupRequired,
+              excluding:
+                  !_launchFinished ||
+                  _requiresConsent ||
+                  _auth.profileSetupRequired,
               child: IgnorePointer(
-                ignoring: _requiresConsent || _auth.profileSetupRequired,
+                ignoring:
+                    !_launchFinished ||
+                    _requiresConsent ||
+                    _auth.profileSetupRequired,
                 child: child!,
               ),
             ),
@@ -267,6 +289,7 @@ class _KarateRatingAppState extends State<KarateRatingApp>
                   ),
                 ),
               ),
+            if (!_launchFinished) const Positioned.fill(child: LaunchSplash()),
           ],
         ),
       ),
@@ -303,9 +326,7 @@ class _KarateRatingAppState extends State<KarateRatingApp>
             }
           },
         ),
-        SessionStatus.restoring => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        SessionStatus.restoring => const LaunchSplash(),
         SessionStatus.unavailable => Scaffold(
           body: SafeArea(
             child: Center(

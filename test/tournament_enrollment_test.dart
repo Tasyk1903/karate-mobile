@@ -21,6 +21,58 @@ void tournamentEnrollmentTests({Future<void> Function(String)? screenshot}) {
   tearDown(() => api.close());
 
   testWidgets(
+    'collapsible tournament information fits phone widths and large text',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      for (final width in [360.0, 393.0, 430.0]) {
+        for (final locale in AppLocale.values) {
+          for (final dark in [false, true]) {
+            tester.view.physicalSize = Size(width, 852);
+            tester.view.devicePixelRatio = 1;
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: dark ? AppTheme.dark() : AppTheme.light(),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(1.35)),
+                  child: child!,
+                ),
+                home: TournamentDetailScreen(
+                  api: api,
+                  strings: AppStrings(locale),
+                  championship: Championship.fromJson({
+                    'id': 1,
+                    'name': 'Международный чемпионат по киокушинкай',
+                  }),
+                  item: TournamentItem.fromJson({
+                    'id': 2,
+                    'name': 'Ката · Мальчики 10–11 лет',
+                    'championship_id': 1,
+                  }),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              tester.getSize(find.byType(ExpansionTile)).height,
+              lessThan(135),
+            );
+            await tester.tap(find.byType(ExpansionTile));
+            await tester.pumpAndSettle();
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$width $locale $dark',
+            );
+            await tester.pumpWidget(const SizedBox());
+          }
+        }
+      }
+    },
+  );
+
+  testWidgets(
     'tournament picker preserves selection across pages and search; failure stays open',
     (tester) async {
       List<int>? selected;
@@ -89,7 +141,7 @@ void tournamentEnrollmentTests({Future<void> Function(String)? screenshot}) {
   );
 
   testWidgets(
-    'tournament details display officials and documents without forbidden attach; 403 has retry',
+    'tournament header starts collapsed and expands all details inside it; 403 has retry',
     (tester) async {
       Widget screen() => MaterialApp(
         theme: AppTheme.light(),
@@ -110,8 +162,26 @@ void tournamentEnrollmentTests({Future<void> Function(String)? screenshot}) {
       await tester.pumpWidget(screen());
       await tester.pumpAndSettle();
       expect(find.text(strings.attach), findsNothing);
+      expect(find.text('${strings.chiefJudge}: Главный Судья'), findsNothing);
+      expect(find.text('${strings.tatami}: A, B'), findsNothing);
+      await tester.tap(find.byType(ExpansionTile));
+      await tester.pumpAndSettle();
       expect(find.text('${strings.chiefJudge}: Главный Судья'), findsOneWidget);
-      expect(find.text(strings.regulationDocument), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ExpansionTile),
+          matching: find.text('${strings.tatami}: A, B'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(ExpansionTile),
+          matching: find.text('${strings.age}: 10–11'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(strings.regulationDocument), findsNothing);
       await screenshot?.call('tournament-information');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -166,6 +236,9 @@ class _TournamentApi extends ApiClient {
         'championship_name': 'Чемпионат России',
         'type': 'kata',
         'date_label': '20.09.2026',
+        'age_from': 10,
+        'age_to': 11,
+        'tatami': 'A, B',
         'date_commission_label': '19.09.2026 18:00',
         'date_finish_label': '21.09.2026 20:00',
         'address': 'Москва, Спортивная улица, 10',

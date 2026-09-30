@@ -335,6 +335,14 @@ class AppStrings {
   String get allCategories => locale.isRu ? 'Все категории' : 'All categories';
   String get yearLabel => locale.isRu ? 'Год' : 'Year';
   String get ratingType => locale.isRu ? 'Тип рейтинга' : 'Rating type';
+  String get myPosts => locale.isRu ? 'Мои публикации' : 'My posts';
+  String get studentListCompact => locale.isRu ? 'Список' : 'List';
+  String get studentListExpanded =>
+      locale.isRu ? 'Расширенный список' : 'Detailed list';
+  String get noFightRecords => locale.isRu ? 'Боев пока нет' : 'No fights yet';
+  String get feedPublication => locale.isRu ? 'Публикация' : 'Post';
+  String get ratingCategories => locale.isRu ? 'Категории' : 'Categories';
+  String get ratingP4p => locale.isRu ? 'Р4Р' : 'P4P';
   String get weightCategory =>
       locale.isRu ? 'Весовая категория' : 'Weight category';
   String get male => locale.isRu ? 'Мальчик' : 'Boy';
@@ -545,6 +553,25 @@ class AppStrings {
   String get trainerFilter =>
       locale.isRu ? 'Фильтр по тренеру' : 'Coach filter';
   String get documents => locale.isRu ? 'Документы' : 'Documents';
+  String get openDocument => locale.isRu ? 'Открыть' : 'Open';
+  String get downloadDocument => locale.isRu ? 'Скачать' : 'Download';
+  String get shareAllDocuments =>
+      locale.isRu ? 'Поделиться всеми документами' : 'Share all documents';
+  String get preparingDocuments =>
+      locale.isRu ? 'Подготовка документов' : 'Preparing documents';
+  String documentShareProgress(int ready, int total) =>
+      '$preparingDocuments: $ready / $total';
+  String get documentShareFailed => locale.isRu
+      ? 'Не удалось поделиться документами. Попробуйте ещё раз.'
+      : 'Could not share the documents. Please try again.';
+  String get noChampionshipDocuments =>
+      locale.isRu ? 'Документов пока нет' : 'No documents yet';
+  String get documentOpenFailed => locale.isRu
+      ? 'Не удалось открыть документ'
+      : 'Could not open the document';
+  String get whiteSide => locale.isRu ? 'Белая сторона' : 'White side';
+  String get redSide => locale.isRu ? 'Красная сторона' : 'Red side';
+  String get fightNumberLabel => locale.isRu ? 'Бой' : 'Fight';
   String get contacts => locale.isRu ? 'Контакты' : 'Contacts';
   String get generalQuestions =>
       locale.isRu ? 'Общие вопросы' : 'General questions';

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../widgets/rank_belt.dart';
+
 import '../api/api_client.dart';
 import '../l10n/app_locale.dart';
 import '../navigation/coach_bottom_nav.dart';
@@ -28,6 +30,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   final _scrollController = ScrollController();
   Timer? _searchDebounce;
   var _searchVisible = false;
+  var _compact = true;
   String? _ageGroup;
   String? _rang;
   String? _gender;
@@ -288,6 +291,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     onBelt: () => _openFilter(strings.belt, [
                       _FilterOption(strings.allBelts, null),
                       for (final rank in [
+                        '0 кю',
                         '10 кю',
                         '9 кю',
                         '8 кю',
@@ -300,7 +304,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
                         '1 кю',
                         '1 дан',
                       ])
-                        _FilterOption(rank, widget.strings.rankValue(rank)),
+                        _FilterOption(widget.strings.rankValue(rank), rank),
                     ], (value) => setState(() => _rang = value)),
                     onGender: () => _openFilter(strings.gender, [
                       _FilterOption(strings.bothGenders, null),
@@ -317,6 +321,25 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     ], (value) => setState(() => _tournamentStatus = value)),
                   ),
                   const SizedBox(height: 16),
+                  SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: true,
+                        icon: const Icon(Icons.view_list_outlined, size: 18),
+                        label: Text(strings.studentListCompact),
+                      ),
+                      ButtonSegment(
+                        value: false,
+                        icon: const Icon(Icons.view_agenda_outlined, size: 18),
+                        label: Text(strings.studentListExpanded),
+                      ),
+                    ],
+                    selected: {_compact},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (values) =>
+                        setState(() => _compact = values.single),
+                  ),
+                  const SizedBox(height: 12),
                   if (_isLoading)
                     const Padding(
                       padding: EdgeInsets.only(top: 80),
@@ -330,19 +353,25 @@ class _StudentsScreenState extends State<StudentsScreen> {
                     ..._students.map(
                       (student) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _StudentCard(
-                          strings: strings,
-                          student: student,
-                          onTap: () => _openStudent(student),
-                          onCategories: () => showStudentHistory(
-                            context,
-                            widget.api,
-                            strings,
-                            student.id,
-                            'categories',
-                            strings.activeCategories,
-                          ),
-                        ),
+                        child: _compact
+                            ? _CompactStudentRow(
+                                strings: strings,
+                                student: student,
+                                onTap: () => _openStudent(student),
+                              )
+                            : _StudentCard(
+                                strings: strings,
+                                student: student,
+                                onTap: () => _openStudent(student),
+                                onCategories: () => showStudentHistory(
+                                  context,
+                                  widget.api,
+                                  strings,
+                                  student.id,
+                                  'categories',
+                                  strings.activeCategories,
+                                ),
+                              ),
                       ),
                     ),
                   if (_isLoadingMore)
@@ -547,6 +576,54 @@ class _SearchAndFilters extends StatelessWidget {
       _ => strings.tournaments,
     };
   }
+}
+
+class _CompactStudentRow extends StatelessWidget {
+  const _CompactStudentRow({
+    required this.strings,
+    required this.student,
+    required this.onTap,
+  });
+  final AppStrings strings;
+  final CoachStudent student;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceFor(context),
+    borderRadius: BorderRadius.circular(8),
+    child: ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      leading: _Avatar(url: student.avatarUrl, size: 40),
+      title: Text(
+        student.fullName,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _MiniBelt(belt: student.belt),
+            Text(
+              [
+                strings.rankValue(student.rang),
+                student.ageLabel,
+              ].where((v) => v.isNotEmpty).join(' · '),
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.mutedFor(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right, size: 18),
+      onTap: onTap,
+    ),
+  );
 }
 
 class _StudentCard extends StatelessWidget {
@@ -828,31 +905,10 @@ class _Avatar extends StatelessWidget {
 
 class _MiniBelt extends StatelessWidget {
   const _MiniBelt({required this.belt});
-
   final StudentBelt belt;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 42,
-      height: 10,
-      decoration: BoxDecoration(
-        color: belt.color,
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
-      ),
-      alignment: Alignment.centerRight,
-      child: FractionallySizedBox(
-        widthFactor: 0.28,
-        child: Container(
-          decoration: BoxDecoration(
-            color: belt.accent,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      RankBelt(color: belt.color, stripes: belt.stripes, width: 42);
 }
 
 class _RoundIconButton extends StatelessWidget {

@@ -6,6 +6,7 @@ class StudentBelt {
     required this.color,
     required this.accent,
     required this.progress,
+    this.stripes = const [],
   });
 
   factory StudentBelt.fromJson(Map<String, dynamic>? json) {
@@ -14,6 +15,9 @@ class StudentBelt {
       color: _parseColor(json?['color']?.toString(), const Color(0xFFE5E7EB)),
       accent: _parseColor(json?['accent']?.toString(), const Color(0xFF9CA3AF)),
       progress: ((json?['progress'] as num?)?.toDouble() ?? 0).clamp(0, 100),
+      stripes: (json?['stripes'] as List? ?? [])
+          .map((value) => _parseColor(value.toString(), Colors.transparent))
+          .toList(),
     );
   }
 
@@ -21,6 +25,7 @@ class StudentBelt {
   final Color color;
   final Color accent;
   final double progress;
+  final List<Color> stripes;
 
   static Color _parseColor(String? value, Color fallback) {
     if (value == null || !value.startsWith('#')) return fallback;

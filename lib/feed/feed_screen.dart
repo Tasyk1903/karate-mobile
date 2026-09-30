@@ -8,6 +8,7 @@ import 'feed_composer_sheet.dart';
 import 'feed_settings_sheet.dart';
 import 'feed_reactions.dart';
 import 'feed_media.dart';
+import 'feed_post_screen.dart';
 import 'feed_attachment_button.dart';
 import '../l10n/app_locale.dart';
 import '../navigation/coach_bottom_nav.dart';
@@ -21,12 +22,14 @@ class FeedScreen extends StatefulWidget {
     required this.api,
     required this.email,
     required this.onLogout,
+    this.onlyMine = false,
   });
 
   final AppStrings strings;
   final ApiClient api;
   final String? email;
   final Future<void> Function() onLogout;
+  final bool onlyMine;
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -40,6 +43,8 @@ class _FeedScreenState extends State<FeedScreen>
   bool _loadingMore = false, _publishing = false;
   final _reacting = <int>{};
   bool? _ticker;
+  bool _openingPost = false;
+  bool _skipActivationRefresh = false;
   String? _error;
   var _selectedAudience = FeedAudience.all;
   var _isLoading = true;
@@ -65,21 +70,29 @@ class _FeedScreenState extends State<FeedScreen>
     if (route is PageRoute) coachRouteObserver.subscribe(this, route);
     final enabled = TickerMode.valuesOf(context).enabled;
     if (_ticker == false && enabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loadFeed();
-      });
+      if (_skipActivationRefresh) {
+        _skipActivationRefresh = false;
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_openingPost) _loadFeed(preserve: true);
+        });
+      }
     }
     _ticker = enabled;
   }
 
   @override
   void didPopNext() {
-    if (_ticker != false) _loadFeed();
+    if (_ticker != false && !_openingPost) _loadFeed(preserve: true);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _ticker != false) _loadFeed();
+    if (state == AppLifecycleState.resumed &&
+        _ticker != false &&
+        !_openingPost) {
+      _loadFeed(preserve: true);
+    }
   }
 
   @override
@@ -94,9 +107,11 @@ class _FeedScreenState extends State<FeedScreen>
 
   List<FeedPost> get _visiblePosts => _posts;
 
-  String get _feedScope => _selectedAudience.name;
+  String get _feedScope => widget.onlyMine ? 'mine' : _selectedAudience.name;
 
-  Future<void> _loadFeed({bool more = false}) async {
+  Future<void> _loadFeed({bool more = false, bool preserve = false}) async {
+    if (preserve && (_isLoading || _loadingMore)) return;
+    preserve = preserve && _posts.isNotEmpty;
     if (!mounted ||
         more && (_isLoading || _loadingMore || _page >= _lastPage)) {
       return;
@@ -107,7 +122,7 @@ class _FeedScreenState extends State<FeedScreen>
       _error = null;
       if (more) {
         _loadingMore = true;
-      } else {
+      } else if (!preserve) {
         _isLoading = true;
         _posts = [];
       }
@@ -125,10 +140,10 @@ class _FeedScreenState extends State<FeedScreen>
       setState(() {
         final items = {for (final post in _posts) post.id: post};
         for (final post in data) {
-          items[post.id] = post;
+          if (!preserve || items.containsKey(post.id)) items[post.id] = post;
         }
         _posts = items.values.toList();
-        _page = page;
+        if (!preserve) _page = page;
         _lastPage = (meta['last_page'] as num?)?.toInt() ?? page;
       });
     } catch (error) {
@@ -270,6 +285,25 @@ class _FeedScreenState extends State<FeedScreen>
     );
   }
 
+  Future<void> _openPost(FeedPost post) async {
+    _openingPost = true;
+    _skipActivationRefresh = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => FeedPostScreen(
+            api: widget.api,
+            strings: widget.strings,
+            post: post,
+            onPost: _replacePost,
+          ),
+        ),
+      );
+    } finally {
+      _openingPost = false;
+    }
+  }
+
   void _showMessage(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -296,22 +330,39 @@ class _FeedScreenState extends State<FeedScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _FeedHeader(
-                            strings: widget.strings,
-                            api: widget.api,
-                            onLogout: widget.onLogout,
-                            onSettings: _openSettings,
-                          ),
+                          if (widget.onlyMine)
+                            Row(
+                              children: [
+                                const BackButton(),
+                                Expanded(
+                                  child: Text(
+                                    widget.strings.myPosts,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            _FeedHeader(
+                              strings: widget.strings,
+                              api: widget.api,
+                              onLogout: widget.onLogout,
+                              onSettings: _openSettings,
+                            ),
                           const SizedBox(height: 22),
-                          _AudienceTabs(
-                            student: widget.api.isStudent,
-                            strings: widget.strings,
-                            selected: _selectedAudience,
-                            onChanged: (value) {
-                              setState(() => _selectedAudience = value);
-                              _loadFeed();
-                            },
-                          ),
+                          if (!widget.onlyMine)
+                            _AudienceTabs(
+                              student: widget.api.isStudent,
+                              strings: widget.strings,
+                              selected: _selectedAudience,
+                              onChanged: (value) {
+                                setState(() => _selectedAudience = value);
+                                _loadFeed();
+                              },
+                            ),
                           const SizedBox(height: 16),
                           _PostComposer(
                             strings: widget.strings,
@@ -344,11 +395,13 @@ class _FeedScreenState extends State<FeedScreen>
                             itemBuilder: (context, index) {
                               final post = _visiblePosts[index];
                               return FeedPostCard(
+                                key: ValueKey(post.id),
                                 strings: widget.strings,
                                 post: post,
                                 onEdit: () => _openComposer(post: post),
                                 onDelete: () => _deletePost(post),
                                 onComments: () => _openComments(post),
+                                onOpen: () => _openPost(post),
                                 onReaction: (type) =>
                                     _toggleReaction(post, type),
                               );
@@ -388,11 +441,13 @@ class _FeedScreenState extends State<FeedScreen>
           ),
         ],
       ),
-      bottomNavigationBar: CoachBottomNav(
-        strings: widget.strings,
-        api: widget.api,
-        active: CoachNavItem.feed,
-      ),
+      bottomNavigationBar: widget.onlyMine
+          ? null
+          : CoachBottomNav(
+              strings: widget.strings,
+              api: widget.api,
+              active: CoachNavItem.feed,
+            ),
     );
   }
 }
@@ -617,11 +672,13 @@ class FeedPostCard extends StatelessWidget {
     required this.onDelete,
     required this.onComments,
     required this.onReaction,
+    this.onOpen,
   });
   final AppStrings strings;
   final FeedPost post;
   final VoidCallback onEdit, onDelete, onComments;
   final ValueChanged<String> onReaction;
+  final VoidCallback? onOpen;
   @override
   Widget build(BuildContext context) => Material(
     color: Theme.of(context).colorScheme.surface,
@@ -684,7 +741,11 @@ class FeedPostCard extends StatelessWidget {
               ),
             ),
           if (post.attachment != null)
-            FeedMedia(attachment: post.attachment!, strings: strings),
+            FeedMedia(
+              attachment: post.attachment!,
+              strings: strings,
+              onOpen: onOpen,
+            ),
           const Divider(height: 18),
           FeedReactions(
             strings: strings,

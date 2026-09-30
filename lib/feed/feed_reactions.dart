@@ -18,11 +18,11 @@ class FeedReactions extends StatelessWidget {
   final ValueChanged<String> onSelect;
   final bool enabled;
   static const icons = {
-    'love': Icons.favorite_outline,
-    'funny': Icons.sentiment_very_satisfied,
-    'like': Icons.thumb_up_outlined,
-    'fire': Icons.local_fire_department_outlined,
-    'sad': Icons.sentiment_dissatisfied,
+    'love': '❤️',
+    'funny': '😂',
+    'like': '👍',
+    'fire': '🔥',
+    'sad': '😢',
   };
   @override
   Widget build(BuildContext context) => Wrap(
@@ -36,6 +36,9 @@ class FeedReactions extends StatelessWidget {
             style: TextButton.styleFrom(
               minimumSize: const Size(42, 36),
               padding: const EdgeInsets.symmetric(horizontal: 6),
+              backgroundColor: selected == entry.key
+                  ? AppColors.red.withValues(alpha: 0.10)
+                  : Colors.transparent,
               foregroundColor: selected == entry.key
                   ? AppColors.red
                   : AppColors.mutedFor(context),
@@ -43,7 +46,7 @@ class FeedReactions extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(entry.value, size: 18),
+                Text(entry.value, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 3),
                 Text(
                   '${counts[entry.key] ?? 0}',

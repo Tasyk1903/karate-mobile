@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+
+import '../widgets/rank_belt.dart';
+
+import '../feed/my_posts_button.dart';
 
 import '../api/api_client.dart';
 import '../l10n/app_locale.dart';
@@ -263,6 +268,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen>
                         ),
                         const SizedBox(height: 18),
                         _ProfileHero(strings: strings, student: student),
+                        if (widget.ownProfile && widget.api.isStudent)
+                          MyPostsButton(api: widget.api, strings: strings),
                         if (widget.ownProfile &&
                             widget.api.isStudent &&
                             student.canEdit('join_coach')) ...[
@@ -418,12 +425,12 @@ class _ProfileHero extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     _InfoLine(
-                      assetPath: 'assets/images/club-icon.png',
+                      icon: Icons.groups_outlined,
                       text: '${strings.club}: ${student.club}',
                     ),
                     const SizedBox(height: 5),
                     _InfoLine(
-                      assetPath: 'assets/images/coach-icon.png',
+                      icon: Icons.person_outline,
                       text: '${strings.coach}: ${student.coachName}',
                     ),
                     const SizedBox(height: 8),
@@ -478,7 +485,13 @@ class _ProfileHero extends StatelessWidget {
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              final compactTileWidth = (constraints.maxWidth - 24) / 5;
+              final columns =
+                  constraints.maxWidth < 340 ||
+                      MediaQuery.textScalerOf(context).scale(1) > 1.2
+                  ? 2
+                  : 3;
+              final compactTileWidth =
+                  (constraints.maxWidth - 6 * (columns - 1)) / columns;
 
               return Wrap(
                 spacing: 6,
@@ -486,29 +499,39 @@ class _ProfileHero extends StatelessWidget {
                 children: [
                   _FactTile(
                     width: compactTileWidth,
-                    assetPath: 'assets/images/age-icon.png',
+                    icon: CupertinoIcons.time,
+                    tint: const Color(0xFFAB292D),
+                    label: strings.age,
                     value: student.ageLabel,
                   ),
                   _FactTile(
                     width: compactTileWidth,
-                    assetPath: 'assets/images/gender-icon.png',
+                    icon: CupertinoIcons.person_2,
+                    tint: const Color(0xFF547CA4),
+                    label: strings.gender,
                     value: student.genderLabel,
                   ),
                   _FactTile(
                     width: compactTileWidth,
-                    assetPath: 'assets/images/birth-date-icon.png',
+                    icon: CupertinoIcons.calendar,
+                    tint: const Color(0xFFAB292D),
+                    label: strings.birthDate,
                     value: student.birthday,
                   ),
                   _FactTile(
                     width: compactTileWidth,
-                    assetPath: 'assets/images/weight-icon.png',
+                    icon: CupertinoIcons.gauge,
+                    tint: const Color(0xFF358477),
+                    label: strings.weight,
                     value: student.weight == '—'
                         ? '—'
                         : '${student.weight} ${strings.kg}',
                   ),
                   _FactTile(
                     width: compactTileWidth,
-                    assetPath: 'assets/images/height-icon.png',
+                    icon: CupertinoIcons.arrow_up_down,
+                    tint: const Color(0xFF9C772A),
+                    label: strings.height,
                     value: student.height == '—'
                         ? '—'
                         : '${student.height} ${strings.cm}',
@@ -1024,65 +1047,56 @@ class _DocumentCard extends StatelessWidget {
 }
 
 class _FactTile extends StatelessWidget {
-  const _FactTile({required this.value, required this.width, this.assetPath});
-
-  final String? assetPath;
+  const _FactTile({
+    required this.value,
+    required this.width,
+    required this.icon,
+    required this.label,
+    required this.tint,
+  });
+  final IconData icon;
+  final Color tint;
+  final String label;
   final double width;
   final String value;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceFor(context),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: AppColors.borderFor(context)),
-      ),
-      child: Column(
-        children: [
-          if (assetPath != null)
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: ClipRect(
-                child: OverflowBox(
-                  minWidth: 34,
-                  minHeight: 34,
-                  maxWidth: 34,
-                  maxHeight: 34,
-                  child: Image.asset(assetPath!, fit: BoxFit.contain),
-                ),
+  Widget build(BuildContext context) => Container(
+    width: width,
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: tint.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
               ),
-            )
-          else
-            Icon(
-              Icons.info_outline_rounded,
-              color: AppColors.inkFor(context),
-              size: 20,
+              child: Icon(icon, size: 18, color: tint),
             ),
-          const SizedBox(height: 3),
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
+            const SizedBox(width: 7),
+            Expanded(
               child: Text(
-                value,
-                maxLines: 1,
+                label,
                 style: TextStyle(
-                  color: AppColors.inkFor(context),
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                  color: AppColors.mutedFor(context),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Panel extends StatelessWidget {
@@ -1106,74 +1120,28 @@ class _Panel extends StatelessWidget {
 }
 
 class _InfoLine extends StatelessWidget {
-  const _InfoLine({required this.text, this.assetPath});
-
-  final String? assetPath;
+  const _InfoLine({required this.text, required this.icon});
+  final IconData icon;
   final String text;
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (assetPath != null)
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: ClipRect(
-              child: OverflowBox(
-                minWidth: 38,
-                minHeight: 38,
-                maxWidth: 38,
-                maxHeight: 38,
-                child: Image.asset(assetPath!, fit: BoxFit.contain),
-              ),
-            ),
-          )
-        else
-          Icon(
-            Icons.info_outline_rounded,
-            color: AppColors.mutedFor(context),
-            size: 18,
-          ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _mutedStyle(context).copyWith(fontSize: 14),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 18, color: AppColors.mutedFor(context)),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(text, style: _mutedStyle(context).copyWith(fontSize: 13)),
+      ),
+    ],
+  );
 }
 
 class _BeltProgress extends StatelessWidget {
   const _BeltProgress({required this.belt});
-
   final StudentBelt belt;
-
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(99),
-      child: Stack(
-        children: [
-          Container(
-            height: 8,
-            color: belt.progress <= 0 ? const Color(0xFFE5E7EB) : belt.color,
-          ),
-          Positioned(
-            right: 18,
-            top: 0,
-            bottom: 0,
-            child: Container(width: 12, color: belt.accent),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      RankBelt(color: belt.color, stripes: belt.stripes);
 }
 
 class _Avatar extends StatelessWidget {

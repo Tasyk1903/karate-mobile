@@ -13,11 +13,15 @@ class FeedCommentsSheet extends StatefulWidget {
     required this.strings,
     required this.post,
     required this.onPost,
+    this.header,
+    this.fullPage = false,
   });
   final ApiClient api;
   final AppStrings strings;
   final FeedPost post;
   final ValueChanged<FeedPost> onPost;
+  final Widget? header;
+  final bool fullPage;
   @override
   State<FeedCommentsSheet> createState() => _FeedCommentsSheetState();
 }
@@ -325,28 +329,43 @@ class _FeedCommentsSheetState extends State<FeedCommentsSheet> {
       canPop: !_busy,
       child: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
+          bottom: widget.fullPage ? 0 : MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SafeArea(
           child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.75,
+            height: widget.fullPage
+                ? null
+                : MediaQuery.sizeOf(context).height * 0.75,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      s.comments,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                  if (!widget.fullPage)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        s.comments,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
                   Expanded(
                     child: ListView(
                       children: [
+                        if (widget.header != null) widget.header!,
+                        if (widget.fullPage)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              s.comments,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         for (final comment in _comments) _tile(comment),
                         if (_loading)
                           const LinearProgressIndicator()

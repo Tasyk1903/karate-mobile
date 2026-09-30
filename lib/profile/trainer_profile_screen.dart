@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../widgets/rank_belt.dart';
+
 import 'package:image_picker/image_picker.dart';
 
 import '../api/api_client.dart';
@@ -9,6 +12,7 @@ import '../l10n/app_locale.dart';
 import '../navigation/coach_bottom_nav.dart';
 import '../theme/app_colors.dart';
 import 'trainer_profile_models.dart';
+import '../feed/my_posts_button.dart';
 
 class TrainerProfileScreen extends StatefulWidget {
   const TrainerProfileScreen({
@@ -125,6 +129,10 @@ class _TrainerProfileScreenState extends State<TrainerProfileScreen> {
                                   strings: widget.strings,
                                   profile: _profile!,
                                 ),
+                              MyPostsButton(
+                                api: widget.api,
+                                strings: widget.strings,
+                              ),
                             ],
                           ),
                         ),
@@ -846,26 +854,10 @@ class _InfoLine extends StatelessWidget {
 
 class _BeltProgress extends StatelessWidget {
   const _BeltProgress({required this.belt});
-
   final TrainerBelt belt;
-
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(99),
-      child: Stack(
-        children: [
-          Container(height: 8, color: belt.color),
-          Positioned(
-            right: 18,
-            top: 0,
-            bottom: 0,
-            child: Container(width: 12, color: belt.accent),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      RankBelt(color: belt.color, stripes: belt.stripes);
 }
 
 class _FactTile extends StatelessWidget {

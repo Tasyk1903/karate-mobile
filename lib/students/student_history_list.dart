@@ -69,9 +69,14 @@ class _StudentHistoryListState extends State<StudentHistoryList> {
           const Divider(height: 1),
         ],
         if (!_loading && _rows.isEmpty && _error == null)
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('—', textAlign: TextAlign.center),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              widget.kind == 'wins' || widget.kind == 'losses'
+                  ? s.noFightRecords
+                  : '—',
+              textAlign: TextAlign.center,
+            ),
           ),
         if (_error != null) Text(_error!),
         if (_loading)
@@ -102,11 +107,62 @@ class _StudentHistoryListState extends State<StudentHistoryList> {
       lines.add('${s.wins}: ${t.wins} · ${s.losses}: ${t.losses}');
     } else {
       final f = StudentFightRecord.fromJson(row);
-      name = f.opponentName;
-      lines.add('${f.opponentAge} · ${f.opponentCoach}');
       final club = row['opponent']?['club']?.toString();
-      if (club != null && club.isNotEmpty) lines.add(club);
-      lines.addAll([f.tournamentName, f.pool, f.fightDate]);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                widget.kind == 'wins'
+                    ? Icons.emoji_events_outlined
+                    : Icons.sports_martial_arts,
+                size: 20,
+                color: widget.kind == 'wins'
+                    ? Colors.green
+                    : Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  f.opponentName,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            f.tournamentName,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 4),
+          Text(f.pool, style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 8),
+          Text(
+            '${s.coach}: ${f.opponentCoach}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (club != null && club.isNotEmpty)
+            Text('${s.club}: $club', style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 16,
+            runSpacing: 4,
+            children: [
+              Text(
+                '${s.age}: ${f.opponentAge}',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(f.fightDate, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,6 +189,19 @@ void showStudentHistory(
   String kind,
   String title,
 ) {
+  if (kind == 'wins' || kind == 'losses') {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StudentFightHistoryScreen(
+          api: api,
+          strings: strings,
+          studentId: studentId,
+          initialKind: kind,
+        ),
+      ),
+    );
+    return;
+  }
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -155,6 +224,79 @@ void showStudentHistory(
             ),
           ],
         ),
+      ),
+    ),
+  );
+}
+
+class StudentFightHistoryScreen extends StatefulWidget {
+  const StudentFightHistoryScreen({
+    super.key,
+    required this.api,
+    required this.strings,
+    required this.studentId,
+    required this.initialKind,
+  });
+  final ApiClient api;
+  final AppStrings strings;
+  final int studentId;
+  final String initialKind;
+  @override
+  State<StudentFightHistoryScreen> createState() =>
+      _StudentFightHistoryScreenState();
+}
+
+class _StudentFightHistoryScreenState extends State<StudentFightHistoryScreen> {
+  late String _kind = widget.initialKind;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(
+        widget.strings.record,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+      ),
+    ),
+    body: SafeArea(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                segments: [
+                  ButtonSegment(
+                    value: 'wins',
+                    label: Text(widget.strings.wins),
+                  ),
+                  ButtonSegment(
+                    value: 'losses',
+                    label: Text(widget.strings.losses),
+                  ),
+                ],
+                selected: {_kind},
+                showSelectedIcon: false,
+                onSelectionChanged: (values) =>
+                    setState(() => _kind = values.single),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              key: ValueKey(_kind),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              children: [
+                StudentHistoryList(
+                  key: ValueKey(_kind),
+                  api: widget.api,
+                  strings: widget.strings,
+                  studentId: widget.studentId,
+                  kind: _kind,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     ),
   );

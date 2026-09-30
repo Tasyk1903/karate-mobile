@@ -541,78 +541,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen> {
                       strings: widget.strings,
                       api: widget.api,
                     ),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        if (detail.ageRange.isNotEmpty)
-                          Text(
-                            '${widget.strings.age}: ${detail.ageRange}',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                        if (detail.tatami.isNotEmpty)
-                          Text(
-                            '${widget.strings.tatami}: ${detail.tatami}',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                        if (detail.rankGroup.isNotEmpty)
-                          Text(
-                            detail.rankGroup == 'junior'
-                                ? widget.strings.juniorRankGroup
-                                : widget.strings.seniorRankGroup,
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                      ],
-                    ),
-                    if (detail.chiefJudge.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '${widget.strings.chiefJudge}: ${detail.chiefJudge}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    if (detail.chiefSecretary.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          '${widget.strings.chiefSecretary}: ${detail.chiefSecretary}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    Wrap(
-                      spacing: 8,
-                      children: detail.documents
-                          .map(
-                            (document) => TextButton.icon(
-                              icon: const Icon(
-                                Icons.description_outlined,
-                                size: 16,
-                              ),
-                              label: Text(
-                                document.key == 'regulation_document'
-                                    ? widget.strings.regulationDocument
-                                    : widget.strings.applicationDocument,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              onPressed: () async {
-                                try {
-                                  final bytes = await widget.api.getBytes(
-                                    document.url,
-                                  );
-                                  final file = await DownloadHelper.saveBytes(
-                                    bytes: bytes,
-                                    fileName: document.name,
-                                  );
-                                  await DownloadHelper.share(file);
-                                } catch (error) {
-                                  if (mounted) _message(error.toString());
-                                }
-                              },
-                            ),
-                          )
-                          .toList(),
-                    ),
                     const SizedBox(height: 18),
                     _Tabs(
                       tab: _tab,
@@ -812,150 +740,127 @@ class _HeroCard extends StatelessWidget {
     required this.strings,
     required this.api,
   });
-
   final TournamentDetail detail;
   final AppStrings strings;
   final ApiClient api;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(context),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: SizedBox(
-              width: 74,
-              height: 90,
-              child: detail.cover == null
-                  ? ColoredBox(
-                      color: const Color(0xFFFFEAEA),
-                      child: Icon(
-                        detail.type == 'kata'
-                            ? Icons.self_improvement_rounded
-                            : Icons.sports_martial_arts_rounded,
-                        color: AppColors.accentFor(context),
-                        size: 30,
-                      ),
-                    )
-                  : Image.network(
-                      api.publicUrl(detail.cover!),
-                      fit: BoxFit.cover,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  detail.name,
-                  style: TextStyle(
-                    color: AppColors.inkFor(context),
-                    fontSize: 13,
-                    height: 1.2,
-                    fontWeight: FontWeight.w600,
-                  ),
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceFor(context),
+    borderRadius: BorderRadius.circular(8),
+    clipBehavior: Clip.antiAlias,
+    child: ExpansionTile(
+      key: const PageStorageKey('tournament-information'),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      shape: const Border(),
+      collapsedShape: const Border(),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 44,
+          height: 48,
+          child: detail.cover == null
+              ? Icon(
+                  Icons.sports_martial_arts,
+                  color: AppColors.accentFor(context),
+                )
+              : Image.network(
+                  api.publicUrl(detail.cover!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, error, stack) =>
+                      const Icon(Icons.sports_martial_arts),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  detail.championshipName,
-                  style: TextStyle(
-                    color: AppColors.mutedFor(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: 15,
-                      color: AppColors.mutedFor(context),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      detail.dateLabel,
-                      style: TextStyle(
-                        color: AppColors.mutedFor(context),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _StatusPill(
-                      text: detail.status == 'active'
-                          ? strings.active
-                          : strings.completed,
-                    ),
-                    _TournamentInfoChip(
-                      icon: Icons.sports_martial_arts_rounded,
-                      text: detail.type == 'kata'
-                          ? strings.kata
-                          : strings.kumite,
-                    ),
-                    if ((detail.region ?? '').isNotEmpty)
-                      _TournamentInfoChip(
-                        icon: Icons.location_on_outlined,
-                        text: detail.region!,
-                      ),
-                    if ((detail.scale ?? '').isNotEmpty)
-                      _TournamentInfoChip(
-                        icon: Icons.workspace_premium_outlined,
-                        text: detail.scale!,
-                      ),
-                    if (detail.dateFinishLabel.isNotEmpty)
-                      _TournamentInfoChip(
-                        icon: Icons.event_available_outlined,
-                        text: detail.dateFinishLabel,
-                      ),
-                    if (detail.priceLabel.isNotEmpty)
-                      _TournamentInfoChip(
-                        icon: Icons.payments_outlined,
-                        text: detail.priceLabel,
-                      ),
-                  ],
-                ),
-                if ((detail.address ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 7),
-                  Text(
-                    detail.address!,
-                    style: TextStyle(
-                      color: AppColors.mutedFor(context),
-                      fontSize: 11,
-                      height: 1.2,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                if (detail.dateCommissionLabel.isNotEmpty) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    '${strings.commissionDate}: ${detail.dateCommissionLabel}',
-                    style: TextStyle(
-                      color: AppColors.mutedFor(context),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-    );
-  }
+      title: Text(
+        detail.name,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Divider(height: 16),
+              Text(
+                detail.championshipName,
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _StatusPill(
+                    text: detail.status == 'active'
+                        ? strings.active
+                        : strings.completed,
+                  ),
+                  _TournamentInfoChip(
+                    icon: Icons.calendar_today_outlined,
+                    text: detail.dateLabel,
+                  ),
+                  _TournamentInfoChip(
+                    icon: Icons.sports_martial_arts,
+                    text: detail.type == 'kata' ? strings.kata : strings.kumite,
+                  ),
+                  if (detail.ageRange.isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.people_outline,
+                      text: '${strings.age}: ${detail.ageRange}',
+                    ),
+                  if (detail.tatami.isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.grid_view,
+                      text: '${strings.tatami}: ${detail.tatami}',
+                    ),
+                  if ((detail.region ?? '').isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.location_on_outlined,
+                      text: detail.region!,
+                    ),
+                  if ((detail.scale ?? '').isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.workspace_premium_outlined,
+                      text: detail.scale!,
+                    ),
+                  if (detail.dateFinishLabel.isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.event_available_outlined,
+                      text: detail.dateFinishLabel,
+                    ),
+                  if (detail.priceLabel.isNotEmpty)
+                    _TournamentInfoChip(
+                      icon: Icons.payments_outlined,
+                      text: detail.priceLabel,
+                    ),
+                ],
+              ),
+              for (final text in [
+                if (detail.rankGroup.isNotEmpty)
+                  detail.rankGroup == 'junior'
+                      ? strings.juniorRankGroup
+                      : strings.seniorRankGroup,
+                if ((detail.address ?? '').isNotEmpty) detail.address!,
+                if (detail.dateCommissionLabel.isNotEmpty)
+                  '${strings.commissionDate}: ${detail.dateCommissionLabel}',
+                if (detail.chiefJudge.isNotEmpty)
+                  '${strings.chiefJudge}: ${detail.chiefJudge}',
+                if (detail.chiefSecretary.isNotEmpty)
+                  '${strings.chiefSecretary}: ${detail.chiefSecretary}',
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(text, style: const TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _TournamentInfoChip extends StatelessWidget {
@@ -1013,26 +918,29 @@ class _Tabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
+      constraints: const BoxConstraints(minHeight: 52),
       decoration: _cardDecoration(context, radius: 20),
-      child: Row(
-        children: [
-          _TabButton(
-            text: strings.participants,
-            active: tab == TournamentDetailTab.participants,
-            onTap: () => onChanged(TournamentDetailTab.participants),
-          ),
-          _TabButton(
-            text: strings.coaches,
-            active: tab == TournamentDetailTab.coaches,
-            onTap: () => onChanged(TournamentDetailTab.coaches),
-          ),
-          _TabButton(
-            text: tableTitle,
-            active: tab == TournamentDetailTab.tables,
-            onTap: () => onChanged(TournamentDetailTab.tables),
-          ),
-        ],
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TabButton(
+              text: strings.participants,
+              active: tab == TournamentDetailTab.participants,
+              onTap: () => onChanged(TournamentDetailTab.participants),
+            ),
+            _TabButton(
+              text: strings.coaches,
+              active: tab == TournamentDetailTab.coaches,
+              onTap: () => onChanged(TournamentDetailTab.coaches),
+            ),
+            _TabButton(
+              text: tableTitle,
+              active: tab == TournamentDetailTab.tables,
+              onTap: () => onChanged(TournamentDetailTab.tables),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1054,30 +962,35 @@ class _TabButton extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              text,
-              style: TextStyle(
-                color: active
-                    ? AppColors.accentFor(context)
-                    : AppColors.mutedFor(context),
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: active
+                      ? AppColors.accentFor(context)
+                      : AppColors.mutedFor(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(height: 9),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: active ? 96 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: AppColors.red,
-                borderRadius: BorderRadius.circular(999),
+              const SizedBox(height: 9),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: active ? 56 : 0,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -253,6 +253,70 @@ void notificationRatingTests({Future<void> Function(String)? screenshot}) {
   );
 
   testWidgets(
+    'coach photos are used in leader card and full ranking with error fallback',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      api.withCoaches = true;
+      await tester.pumpWidget(app(RatingScreen(api: api, strings: s)));
+      await tester.pumpAndSettle();
+      final photos = find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is NetworkImage &&
+            (widget.image as NetworkImage).url ==
+                'https://example.test/coach.jpg',
+      );
+      expect(photos, findsOneWidget);
+      await tester.scrollUntilVisible(find.text(s.showFullCoachRating), 200);
+      await tester.tap(find.text(s.showFullCoachRating));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: find.byType(BottomSheet), matching: photos),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'rating defaults to categories and switches modes without a selector',
+    (tester) async {
+      await tester.pumpWidget(app(RatingScreen(api: api, strings: s)));
+      await tester.pumpAndSettle();
+      expect(api.ratingQueries.last['view_mode'], 'all');
+      expect(
+        tester
+            .widget<SegmentedButton<String>>(
+              find.byType(SegmentedButton<String>),
+            )
+            .selected,
+        {'all'},
+      );
+      expect(find.text(s.ratingType), findsNothing);
+      await tester.tap(find.text(s.ratingP4p));
+      await tester.pumpAndSettle();
+      expect(api.ratingQueries.last['view_mode'], 'p4p');
+      expect(api.ratingQueries.last['weight_category'], isNull);
+      expect(find.byType(BottomSheet), findsNothing);
+      await tester.tap(find.text(s.ratingCategories));
+      await tester.pumpAndSettle();
+      expect(api.ratingQueries.last['view_mode'], 'all');
+      await tester.tap(find.text(s.kata).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(SegmentedButton<String>), findsNothing);
+      await tester.tap(find.text(s.kumite).first);
+      await tester.pumpAndSettle();
+      expect(api.ratingQueries.last['view_mode'], 'all');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'rating clears dependent filters and ignores stale discipline response',
     (tester) async {
       tester.view.physicalSize = const Size(393, 852);
@@ -310,6 +374,13 @@ void notificationRatingTests({Future<void> Function(String)? screenshot}) {
           );
           await tester.pumpAndSettle();
           await tester.scrollUntilVisible(find.text(strings.organization), 200);
+          expect(
+            tester.getTopLeft(find.text(strings.region).first).dy,
+            closeTo(
+              tester.getTopLeft(find.text(strings.organization).first).dy,
+              1,
+            ),
+          );
           await tester.tap(find.text(strings.organization));
           await tester.pumpAndSettle();
           await tester.tap(find.text(_Api.longOrganization));
@@ -332,6 +403,7 @@ class _Api extends ApiClient {
   final pages = <int>[];
   final read = <int>{};
   bool failMark = false, failRating = false;
+  bool withCoaches = false;
   int? failPage;
   Completer<Map<String, dynamic>>? holdRating, held;
   final ratingQueries = <Map<String, String?>>[];
@@ -356,7 +428,10 @@ class _Api extends ApiClient {
               ],
             },
           ],
-    'trainer_ranking': {'items': []},
+    'trainer_ranking': {
+      if (withCoaches) 'leader': coach,
+      'items': withCoaches ? [coach] : [],
+    },
     'filter_options': {
       'organizations': {'9': longOrganization},
       'age_bands': {'10-11': '10-11'},
@@ -364,6 +439,12 @@ class _Api extends ApiClient {
       'regions': {'4': 'Region'},
       'view_modes': {'all': 'All', 'p4p': 'P4P'},
     },
+  };
+  Map<String, dynamic> get coach => {
+    'name': 'Test Coach',
+    'club': 'Test Club',
+    'points': 15,
+    'avatar_url': 'https://example.test/coach.jpg',
   };
   @override
   Future<Map<String, dynamic>> getJson(

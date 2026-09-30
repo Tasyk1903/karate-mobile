@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:karaterating_trainer/api/api_client.dart';
@@ -9,6 +12,9 @@ import 'package:karaterating_trainer/l10n/app_locale.dart';
 import 'package:karaterating_trainer/students/student_profile_screen.dart';
 import 'package:karaterating_trainer/students/student_invitations_screen.dart';
 import 'package:karaterating_trainer/students/student_history_list.dart';
+import 'package:karaterating_trainer/students/students_screen.dart';
+import 'package:karaterating_trainer/students/student_models.dart';
+import 'package:karaterating_trainer/widgets/rank_belt.dart';
 import 'package:karaterating_trainer/theme/app_theme.dart';
 
 void main() => studentWorkflowTests();
@@ -21,10 +27,188 @@ void studentWorkflowTests({Future<void> Function(String)? screenshot}) {
     api = _StudentApi(AuthSession(await SharedPreferences.getInstance()));
   });
   tearDown(() => api.close());
+  setUpAll(() async {
+    const font = String.fromEnvironment('SCREENSHOT_FONT');
+    if (font.isNotEmpty) {
+      await (FontLoader(
+        'StudentTestFont',
+      )..addFont(File(font).readAsBytes().then(ByteData.sublistView))).load();
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+      await (FontLoader('packages/cupertino_icons/CupertinoIcons')..addFont(
+            rootBundle.load(
+              'packages/cupertino_icons/assets/CupertinoIcons.ttf',
+            ),
+          ))
+          .load();
+    }
+  });
   Future<void> mount(WidgetTester tester, Widget child) async {
     await tester.pumpWidget(MaterialApp(theme: AppTheme.light(), home: child));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('student views fit phone widths locales themes and large text', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final width in [360.0, 393.0, 430.0]) {
+      for (final locale in AppLocale.values) {
+        for (final dark in [false, true]) {
+          final strings = AppStrings(locale);
+          for (final view in ['expanded', 'compact', 'profile', 'record']) {
+            tester.view.physicalSize = Size(width, 852);
+            tester.view.devicePixelRatio = 1;
+            await tester.pumpWidget(const SizedBox.shrink());
+            final base = dark ? AppTheme.dark() : AppTheme.light();
+            await tester.pumpWidget(
+              MaterialApp(
+                theme: const String.fromEnvironment('SCREENSHOT_FONT').isEmpty
+                    ? base
+                    : base.copyWith(
+                        textTheme: base.textTheme.apply(
+                          fontFamily: 'StudentTestFont',
+                        ),
+                      ),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(textScaler: TextScaler.linear(1.35)),
+                  child: RepaintBoundary(
+                    key: const ValueKey('student-capture'),
+                    child: child!,
+                  ),
+                ),
+                home: view == 'profile'
+                    ? StudentProfileScreen(
+                        api: api,
+                        strings: strings,
+                        studentId: 1,
+                      )
+                    : view == 'record'
+                    ? StudentFightHistoryScreen(
+                        api: api,
+                        strings: strings,
+                        studentId: 1,
+                        initialKind: 'wins',
+                      )
+                    : StudentsScreen(api: api, strings: strings),
+              ),
+            );
+            await tester.pumpAndSettle();
+            if (view == 'expanded') {
+              await tester.tap(find.text(strings.studentListExpanded));
+              await tester.pumpAndSettle();
+            }
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$view $width $locale $dark',
+            );
+            if (const bool.fromEnvironment('SAVE_SCREENSHOTS') &&
+                width == 393 &&
+                locale == AppLocale.ru) {
+              final boundary = tester.renderObject<RenderRepaintBoundary>(
+                find.byKey(const ValueKey('student-capture')),
+              );
+              await tester.runAsync(() async {
+                final image = await boundary.toImage(pixelRatio: 2);
+                final bytes = await image.toByteData(
+                  format: ui.ImageByteFormat.png,
+                );
+                final file = File(
+                  'build/auth-screenshots/student-$view-${dark ? 'dark' : 'light'}.png',
+                );
+                await file.parent.create(recursive: true);
+                await file.writeAsBytes(bytes!.buffer.asUint8List());
+                image.dispose();
+              });
+            }
+          }
+        }
+      }
+    }
+  });
+
+  testWidgets(
+    'student list changes density without reloading and opens profile',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mount(tester, StudentsScreen(api: api, strings: s));
+      expect(find.textContaining('Клуб тренера'), findsNothing);
+      await tester.tap(find.text(s.studentListExpanded));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Клуб тренера'), findsOneWidget);
+      final requests = api.listRequests;
+      await tester.tap(find.text(s.studentListCompact));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Клуб тренера'), findsNothing);
+      expect(api.listRequests, requests);
+      await tester.tap(find.text('Оченьдлиннаяфамилия Александр'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StudentProfileScreen), findsOneWidget);
+      expect(find.text(s.birthDate), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'record uses a full page and changes wins losses with independent pagination',
+    (tester) async {
+      await mount(
+        tester,
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () =>
+                showStudentHistory(context, api, s, 1, 'wins', s.wins),
+            child: const Text('Open record'),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open record'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StudentFightHistoryScreen), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      await tester.tap(find.text(s.moreRecords));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(s.losses));
+      await tester.pumpAndSettle();
+      expect(api.historyKinds, ['wins', 'wins', 'losses']);
+      expect(api.pages, ['1', '2', '1']);
+      expect(find.textContaining('Константинович 2'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('belt has no decorative stripe and renders all dan stripes', (
+    tester,
+  ) async {
+    final belt = StudentBelt.fromJson({'color': '#FFFFFF', 'stripes': []});
+    expect(belt.color, Colors.white);
+    await mount(
+      tester,
+      Center(
+        child: RankBelt(color: belt.color, stripes: belt.stripes, width: 42),
+      ),
+    );
+    expect(find.byType(Positioned), findsNothing);
+    await mount(
+      tester,
+      Center(
+        child: RankBelt(
+          color: Colors.black,
+          stripes: List.filled(10, const Color(0xFFFFD700)),
+          width: 42,
+        ),
+      ),
+    );
+    expect(find.byType(Positioned), findsNWidgets(10));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'student private error and tournament public summary never expose editor',
@@ -212,11 +396,34 @@ class _StudentApi extends ApiClient {
   Map<String, String>? saved;
   List? sent;
   final pages = <String>[];
+  final historyKinds = <String?>[];
+  int listRequests = 0;
   @override
   Future<Map<String, dynamic>> getJson(
     String path, {
     Map<String, String?> query = const {},
   }) async {
+    if (path == '/notifications/unread') return {'unread': 0};
+    if (path == '/students') {
+      listRequests++;
+      return {
+        'data': [
+          {
+            'id': 1,
+            'full_name': 'Оченьдлиннаяфамилия Александр',
+            'club': 'Клуб тренера',
+            'age_label': '11 лет',
+            'rang': '9 кю',
+            'documents_ok': true,
+            'belt': {
+              'color': '#FF7F00',
+              'stripes': ['#0000FF'],
+            },
+          },
+        ],
+        'meta': {'current_page': 1, 'last_page': 1},
+      };
+    }
     if (path == '/student-invitations') {
       return {
         'code': 'KR-CTESTCODE1234',
@@ -229,6 +436,7 @@ class _StudentApi extends ApiClient {
       };
     }
     if (path.endsWith('/history')) {
+      historyKinds.add(query['kind']);
       pages.add(query['page']!);
       return {
         'meta': {
@@ -272,6 +480,13 @@ class _StudentApi extends ApiClient {
           'weight': 35,
           'height': 150,
           'rang': '5 кю',
+          'belt': {
+            'label_key': 'yellowBelt',
+            'color': '#FFD700',
+            'accent': '#00FF00',
+            'stripes': ['#00FF00'],
+            'progress': 60,
+          },
           'age_label': '11 лет',
           'gender_label': 'Мужской',
           'capabilities': {

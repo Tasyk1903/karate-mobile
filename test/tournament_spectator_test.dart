@@ -24,6 +24,64 @@ void spectatorTests({Future<void> Function(String)? screenshot}) {
   });
   tearDown(() => api.close());
 
+  testWidgets('quick fight status and sides fit both themes and phone widths', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final width in [360.0, 393.0, 430.0]) {
+      for (final locale in AppLocale.values) {
+        for (final dark in [false, true]) {
+          tester.view.physicalSize = Size(width, 852);
+          tester.view.devicePixelRatio = 1;
+          api.quickStatus = dark ? 'absent' : 'won';
+          final strings = AppStrings(locale);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: dark ? AppTheme.dark() : AppTheme.light(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(1.35)),
+                child: child!,
+              ),
+              home: QuickFightsScreen(api: api, strings: strings),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .widget<Text>(find.text('${strings.fightNumberLabel} A-2'))
+                .style
+                ?.decoration,
+            TextDecoration.lineThrough,
+          );
+          expect(
+            tester
+                .widget<Text>(find.text('${strings.fightNumberLabel} A-4'))
+                .style
+                ?.fontStyle,
+            FontStyle.italic,
+          );
+          expect(find.byTooltip(strings.whiteSide), findsOneWidget);
+          expect(find.byTooltip(strings.redSide), findsOneWidget);
+          expect(
+            tester
+                .widget<Text>(find.text('Александр Длиннаяфамилия'))
+                .style
+                ?.decoration,
+            dark ? TextDecoration.lineThrough : null,
+          );
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$width $locale $dark',
+          );
+          await tester.pumpWidget(const SizedBox());
+        }
+      }
+    }
+  });
+
   testWidgets(
     'original lists show fallback and paginated members without management',
     (tester) async {
@@ -68,7 +126,7 @@ void spectatorTests({Future<void> Function(String)? screenshot}) {
       await tester.pumpAndSettle();
       expect(find.textContaining('Текущий: A-2'), findsOneWidget);
       if (screenshot != null) await screenshot('spectator-quick-data');
-      await tester.tap(find.textContaining('Финал · A-4'));
+      await tester.tap(find.text('Бой A-4'));
       await tester.pumpAndSettle();
       expect(find.text('Финал'), findsOneWidget);
       expect(find.textContaining('Вазари: 1'), findsOneWidget);
@@ -125,6 +183,7 @@ class SpectatorApi extends ApiClient {
   SpectatorApi(AuthSession session)
     : super(session: session, baseUrl: 'https://example.test/api/mobile');
   bool kata = false;
+  String quickStatus = 'upcoming';
   Map<String, String?> lastQuery = {};
   @override
   Future<Map<String, dynamic>> getJson(
@@ -152,7 +211,8 @@ class SpectatorApi extends ApiClient {
                 'round': 1,
                 'stage': '1/2',
                 'number': 'A-2',
-                'status': 'upcoming',
+                'status': quickStatus,
+                'side': 'white',
               },
               {
                 'id': 5,
@@ -160,6 +220,7 @@ class SpectatorApi extends ApiClient {
                 'stage': 'Финал',
                 'number': 'A-4',
                 'status': 'possible',
+                'side': 'red',
               },
             ],
             'current': {'number': 'A-2'},

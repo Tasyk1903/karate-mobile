@@ -30,7 +30,7 @@ class _RatingScreenState extends State<RatingScreen> {
   var _coachItems = <RatingAthlete>[];
   var _filterOptions = RatingFilterOptions.empty();
   var _year = DateTime.now().year.toString();
-  String? _viewMode;
+  String _viewMode = 'all';
   String? _weightCategory;
   String? _ageBand;
   String? _gender;
@@ -67,7 +67,7 @@ class _RatingScreenState extends State<RatingScreen> {
               ? 'kumite'
               : 'kata',
           'year': _year,
-          'view_mode': _viewMode ?? 'all',
+          'view_mode': _viewMode,
           'weight_category': _discipline == RatingDiscipline.kumite
               ? _weightCategory
               : null,
@@ -100,7 +100,7 @@ class _RatingScreenState extends State<RatingScreen> {
         final normalized = response['filters'];
         if (normalized is Map<String, dynamic> && normalized.isNotEmpty) {
           _weightCategory = normalized['weight_category']?.toString();
-          _viewMode = normalized['view_mode']?.toString();
+          _viewMode = normalized['view_mode'] == 'p4p' ? 'p4p' : 'all';
           _ageBand = normalized['age_band']?.toString();
           _gender = normalized['gender']?.toString();
         }
@@ -122,7 +122,7 @@ class _RatingScreenState extends State<RatingScreen> {
     setState(() {
       _discipline = value;
       _weightCategory = null;
-      _viewMode = null;
+      _viewMode = 'all';
     });
     _loadRating();
   }
@@ -211,15 +211,37 @@ class _RatingScreenState extends State<RatingScreen> {
                           onChanged: _setDiscipline,
                         ),
                         const SizedBox(height: 10),
+                        if (_discipline == RatingDiscipline.kumite) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: SegmentedButton<String>(
+                              segments: [
+                                ButtonSegment(
+                                  value: 'all',
+                                  label: Text(widget.strings.ratingCategories),
+                                ),
+                                ButtonSegment(
+                                  value: 'p4p',
+                                  label: Text(widget.strings.ratingP4p),
+                                ),
+                              ],
+                              selected: {_viewMode},
+                              showSelectedIcon: false,
+                              onSelectionChanged: (values) {
+                                setState(() {
+                                  _viewMode = values.single;
+                                  _weightCategory = null;
+                                });
+                                _loadRating();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         _FilterRow(
                           strings: widget.strings,
                           discipline: _discipline,
                           year: _year,
-                          viewMode: _optionLabel(
-                            _filterOptions.viewModes,
-                            _viewMode,
-                            widget.strings.allCategories,
-                          ),
                           age: _optionLabel(
                             _filterOptions.ageBands,
                             _ageBand,
@@ -264,15 +286,6 @@ class _RatingScreenState extends State<RatingScreen> {
                             }),
                             onSelected: (value) =>
                                 setState(() => _year = value ?? _year),
-                          ),
-                          onViewMode: () => _openFilter(
-                            title: widget.strings.ratingType,
-                            value: _viewMode ?? 'all',
-                            options: _filterOptions.viewModes,
-                            onSelected: (value) => setState(() {
-                              _viewMode = value;
-                              _weightCategory = null;
-                            }),
                           ),
                           onAge: () => _openFilter(
                             title: widget.strings.age,
@@ -507,7 +520,6 @@ class _FilterRow extends StatelessWidget {
     required this.strings,
     required this.discipline,
     required this.year,
-    required this.viewMode,
     required this.age,
     required this.weight,
     required this.gender,
@@ -515,7 +527,6 @@ class _FilterRow extends StatelessWidget {
     required this.organization,
     required this.onOrganization,
     required this.onYear,
-    required this.onViewMode,
     required this.onAge,
     required this.onWeight,
     required this.onGender,
@@ -525,7 +536,6 @@ class _FilterRow extends StatelessWidget {
   final AppStrings strings;
   final RatingDiscipline discipline;
   final String year;
-  final String viewMode;
   final String age;
   final String weight;
   final String gender;
@@ -533,7 +543,6 @@ class _FilterRow extends StatelessWidget {
   final String organization;
   final VoidCallback onOrganization;
   final VoidCallback onYear;
-  final VoidCallback onViewMode;
   final VoidCallback onAge;
   final VoidCallback onWeight;
   final VoidCallback onGender;
@@ -549,13 +558,6 @@ class _FilterRow extends StatelessWidget {
             value: year,
             onTap: onYear,
           ),
-          if (discipline == RatingDiscipline.kumite)
-            (
-              icon: Icons.format_list_bulleted_rounded,
-              title: strings.ratingType,
-              value: viewMode,
-              onTap: onViewMode,
-            ),
           (
             icon: Icons.supervisor_account_outlined,
             title: strings.age,
@@ -597,11 +599,21 @@ class _FilterRow extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final filter in filters)
+            for (final filter in filters.take(filters.length - 2))
               _FilterChip(
-                width: filter.title == strings.organization
+                width:
+                    discipline == RatingDiscipline.kata &&
+                        filter.title == strings.gender
                     ? constraints.maxWidth
                     : width,
+                icon: filter.icon,
+                title: filter.title,
+                value: filter.value,
+                onTap: filter.onTap,
+              ),
+            for (final filter in filters.skip(filters.length - 2))
+              _FilterChip(
+                width: width,
                 icon: filter.icon,
                 title: filter.title,
                 value: filter.value,

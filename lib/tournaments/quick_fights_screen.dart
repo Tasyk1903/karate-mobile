@@ -241,9 +241,16 @@ class _QuickFightsScreenState extends State<QuickFightsScreen>
                         children: [
                           Text(
                             row['name'].toString(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
+                              decoration:
+                                  path.any((p) => p['status'] == 'absent')
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              decorationColor: Theme.of(context)
+                                  .colorScheme
+                                  .error,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -265,44 +272,24 @@ class _QuickFightsScreenState extends State<QuickFightsScreen>
                               s.notGenerated,
                               style: const TextStyle(fontSize: 11),
                             ),
-                          ...path.map(
-                            (p) => InkWell(
-                              onTap: () => _open(
-                                row,
-                                round: (p['round'] as num?)?.toInt(),
-                                poolId: (p['id'] as num?)?.toInt(),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 5,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      p['status'] == 'won'
-                                          ? Icons.emoji_events_outlined
-                                          : p['status'] == 'absent'
-                                          ? Icons.block
-                                          : Icons.chevron_right,
-                                      size: 16,
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: path
+                                .map(
+                                  (p) => _FightStep(
+                                    data: p,
+                                    strings: s,
+                                    onTap: () => _open(
+                                      row,
+                                      round: (p['round'] as num?)?.toInt(),
+                                      poolId: (p['id'] as num?)?.toInt(),
                                     ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        '${s.spectatorStage(p['stage']?.toString() ?? '')} · ${p['number'] ?? '—'} · ${s.fightPathStatus(p['status']?.toString() ?? '')}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: p['status'] == 'absent'
-                                              ? Colors.red
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                                  ),
+                                )
+                                .toList(),
                           ),
+                          const SizedBox(height: 10),
                           if (row['current'] != null || row['next'] != null)
                             Text(
                               '${s.currentFight}: ${row['current']?['number'] ?? '—'} · ${s.nextFight}: ${row['next']?['number'] ?? '—'}',
@@ -340,6 +327,99 @@ class _QuickFightsScreenState extends State<QuickFightsScreen>
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FightStep extends StatelessWidget {
+  const _FightStep({
+    required this.data,
+    required this.strings,
+    required this.onTap,
+  });
+  final Map<String, dynamic> data;
+  final AppStrings strings;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = data['status']?.toString() ?? '';
+    final past = ['won', 'lost', 'absent', 'scored'].contains(status);
+    final failed = ['lost', 'absent'].contains(status);
+    final scheme = Theme.of(context).colorScheme;
+    final color = failed
+        ? scheme.error
+        : past
+        ? scheme.onSurfaceVariant
+        : scheme.onSurface;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 96, maxWidth: 155),
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings.spectatorStage(data['stage']?.toString() ?? ''),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    if (data['side'] != null) ...[
+                      Tooltip(
+                        message: data['side'] == 'red'
+                            ? strings.redSide
+                            : strings.whiteSide,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: data['side'] == 'red'
+                                ? const Color(0xFFBC2831)
+                                : Colors.white,
+                            border: Border.all(color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        '${strings.fightNumberLabel} ${data['number'] ?? '—'}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: color,
+                          decoration: past ? TextDecoration.lineThrough : null,
+                          fontStyle: status == 'possible'
+                              ? FontStyle.italic
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  strings.fightPathStatus(status),
+                  style: TextStyle(fontSize: 10, color: color),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

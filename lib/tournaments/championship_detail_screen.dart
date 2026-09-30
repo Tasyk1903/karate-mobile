@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'championship_documents_screen.dart';
+
 import '../api/api_client.dart';
 import '../l10n/app_locale.dart';
 import '../notifications/notifications_screen.dart';
@@ -140,6 +142,27 @@ class _ChampionshipDetailScreenState extends State<ChampionshipDetailScreen> {
                           onNotifications: _openNotifications,
                         ),
                         const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(
+                              Icons.description_outlined,
+                              size: 18,
+                            ),
+                            label: Text(widget.strings.documents),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => ChampionshipDocumentsScreen(
+                                  api: widget.api,
+                                  strings: widget.strings,
+                                  championshipId: widget.championship.id,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         if (_showSearch) ...[
                           _SearchField(
                             controller: _search,
