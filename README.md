@@ -8,7 +8,7 @@
 ## Android APK Against the Server
 
 ```bash
-flutter build apk --release --build-number=20260918 \
+flutter build apk --release --build-number=20260930 \
   --dart-define=API_BASE_URL=https://karate-rating.ru/api/mobile
 ```
 
